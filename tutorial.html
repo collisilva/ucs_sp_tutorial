@@ -227,18 +227,33 @@ library(openxlsx)
 <p>Para importar a base de dados da Flora do Brasil 2020:</p>
 <pre class="r"><code>read.delim(choose.files(), encoding = &quot;UTF-8&quot;) -&gt; flora2020 
 # em &quot;choose.files()&quot;, escolha a base de dados da Flora 2020 com as espécies de interesse, obtidas em passo anterior.</code></pre>
+<div id="restringindo-o-universo-de-busca-da-flora-2020" class="section level3">
+<h3>3.1. Restringindo o universo de busca da Flora 2020</h3>
+<p>Ao fazer o download da base de dados da Flora 2020, ela vem estruturada no padrão <a href="https://www.gbif.org/pt/darwin-core">Darwin Core (DwC)</a>, que oferece uma estrutura estável, direta e flexível para compilar dados de biodiversidade a partir de fontes variadas. Essencialmente, o formato DwC consiste em um arquivo compactado (“zipado”) com nove ou dez arquivos de texto interconectados. Como não vamos precisar de todas as informações desses arquivos, convém integrar apenas as colunas de interesse em uma única tabela (ou arquivo) de antemão, para que possamos prosseguir com as checagens dos próximos passos.</p>
+<p>Podemos fazer isso tanto no Excel, como no R. Para agilizar o tutorial, já preparei um arquivo com a planilha ajustada para análise, clique aqui para fazer o download. Em termos gerais, eu padronizei a tabela para incluir informações da origem da espécie (se ocorre no estado de São Paulo, se é endêmica do estado, e se a espécie é nativa, naturalizada ou cultivada), além de remover informações ambíguas, duvidosas e incompletas sobre alguns nomes.</p>
+<p>Vamos incluir essa tabela no nosso ambiente de trabalho e chamar ela de <code>flora2020</code>.</p>
+<pre class="r"><code>read.csv(choose.files()) -&gt; flora2020 ##selecione o arquivo &quot;fb2020.txt&quot; que você baixou no seu diretório</code></pre>
+</div>
 </div>
 <div id="fazendo-a-busca-em-sql-do-gazzetteer-de-interesse" class="section level2">
 <h2>4. Fazendo a busca em SQL do gazzetteer de interesse</h2>
 <p>Agora, faremos uma <em>query</em> via SQL, e selecionar apenas aqueles registros da base de dados de ocorrência do GBIF que contenham a UC de interesse. Vamos primeiro trabalhar com uma busca simples, e buscar o gazzetteer “Serra do Mar”, em menção ao Parque Estadual Serra do Mar. Note que outras buscas por outros topônimos devem ser feitas para recuperar mais registros.</p>
-<pre class="r"><code>start_time &lt;- Sys.time()
+<p>A busca pode demorar alguns minutos…</p>
+<pre class="r"><code>start_time &lt;- Sys.time() #para termos noção de quanto tempo levou o processo
 
 selected &lt;- read.csv.sql(choose.files(), sep = &#39;\t&#39;, eol = &#39;\n&#39;,
-             sql = &#39;SELECT * FROM file WHERE locality LIKE &quot;%Serra do Mar%&quot;&#39;) # Note que aqui está &quot;%Serra do Mar%&quot;, mas o gazzetteer pode ser outro!!!
+             sql = &#39;SELECT * FROM file WHERE locality LIKE &quot;%Serra do Mar%&quot;&#39;) # Note que aqui está &quot;%Serra do Mar%&quot;, mas o gazzetteer poderia ser outro!!!
+
 end_time &lt;- Sys.time()
 end_time - start_time
 
 ## Em &quot;choose.files()&quot;, selecione o arquivo &quot;occurrence.txt&quot; da pasta que você baixou do GBIF - é o arquivo mais pesado da pasta que contém todas as informações das ocorrências obtidas na busca.</code></pre>
+<p>Após a busca, vamos exportar os resultados dessa seleção de registros que potencialmente estão na área de interesse:</p>
+<pre class="r"><code>write.table(selected, paste(&quot;PESM_registros_raw.txt&quot;, sep = &quot;&quot;), sep = &#39;\t&#39;, row.names = F)</code></pre>
+</div>
+<div id="checando-e-corrigindo-o-estado-dos-nomes-usando-a-base-da-flora-do-brasil-2020" class="section level2">
+<h2>5. Checando e corrigindo o estado dos nomes usando a base da Flora do Brasil 2020</h2>
+<p>Com a busca feita, podemos proceder para a checagem dos nomes usando a base de dados da Flora 2020.</p>
 </div>
 
 

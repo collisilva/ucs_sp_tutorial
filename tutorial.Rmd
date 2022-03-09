@@ -95,6 +95,22 @@ read.delim(choose.files(), encoding = "UTF-8") -> flora2020
 
 ```
 
+### 3.1. Restringindo o universo de busca da Flora 2020
+
+Ao fazer o download da base de dados da Flora 2020, ela vem estruturada no padrão [Darwin Core (DwC)](https://www.gbif.org/pt/darwin-core), que oferece uma estrutura estável, direta e flexível para compilar dados de biodiversidade a partir de fontes variadas. Essencialmente, o formato DwC consiste em um arquivo compactado ("zipado") com nove ou dez arquivos de texto interconectados. Como não vamos precisar de todas as informações desses arquivos, convém integrar apenas as colunas de interesse em uma única tabela (ou arquivo) de antemão, para que possamos prosseguir com as checagens dos próximos passos.
+
+
+Podemos fazer isso tanto no Excel, como no R. Para agilizar o tutorial, já preparei um arquivo com a planilha ajustada para análise, clique aqui para fazer o download. Em termos gerais, eu padronizei a tabela para incluir informações da origem da espécie (se ocorre no estado de São Paulo, se é endêmica do estado, e se a espécie é nativa, naturalizada ou cultivada), além de remover informações ambíguas, duvidosas e incompletas sobre alguns nomes.
+
+
+Vamos incluir essa tabela no nosso ambiente de trabalho e chamar ela de `flora2020`. 
+
+
+```{r eval=FALSE, include = T}
+read.csv(choose.files()) -> flora2020 ##selecione o arquivo "fb2020.txt" que você baixou no seu diretório
+
+```
+
 
 ## 4. Fazendo a busca em SQL do gazzetteer de interesse
 
@@ -105,10 +121,11 @@ Agora, faremos  uma *query* via SQL, e selecionar apenas aqueles registros da ba
 A busca pode demorar alguns minutos...
 
 ```{r eval=FALSE, include = TRUE}
-start_time <- Sys.time()
+start_time <- Sys.time() #para termos noção de quanto tempo levou o processo
 
 selected <- read.csv.sql(choose.files(), sep = '\t', eol = '\n',
-             sql = 'SELECT * FROM file WHERE locality LIKE "%Serra do Mar%"') # Note que aqui está "%Serra do Mar%", mas o gazzetteer pode ser outro!!!
+             sql = 'SELECT * FROM file WHERE locality LIKE "%Serra do Mar%"') # Note que aqui está "%Serra do Mar%", mas o gazzetteer poderia ser outro!!!
+
 end_time <- Sys.time()
 end_time - start_time
 
@@ -117,11 +134,11 @@ end_time - start_time
 
 Após a busca, vamos exportar os resultados dessa seleção de registros que potencialmente estão na área de interesse: 
 
-```{r}
+```{r eval=FALSE, include = TRUE}
 write.table(selected, paste("PESM_registros_raw.txt", sep = ""), sep = '\t', row.names = F)
 ```
 
 
 ## 5. Checando e corrigindo o estado dos nomes usando a base da Flora do Brasil 2020
 
-Agora que temos os registros buscados
+Com a busca feita, podemos proceder para a checagem dos nomes usando a base de dados da Flora 2020. 
