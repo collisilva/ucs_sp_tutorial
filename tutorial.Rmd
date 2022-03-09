@@ -1,49 +1,127 @@
 ---
-title: "Tutorial rápido - Buscas de registros de espécies nas UCs de SP"
+title: "Tutorial rápido - Primeira busca de registros de ocorrência no Parque Estadual Serra do Mar, São Paulo"
 author: "Matheus Colli-Silva"
 date: "08/03/2022"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+## 1. Introdução
 
-## Introdução
 
 Neste tutorial, você deverá encontrar informações sobre:
+
+
 1) Como realizar buscas no GBIF (The Global Biodiversity Information Facility) para registros de ocorrência de interesse;
+
+
 2) Como fazer as buscas para uma área (gazzetteer) de interesse, utilizando SQL;
+
+
 3) Como discriminar registros mais ou menos confiáveis, considerando a origem do registro, bem como suas informações taxonômicas e geográficas;
+
+
 4) Como obter uma tabela com registros preliminares para posterior checagem manual.
 
 Note que este tutorial é preliminar e apenas organiza um procedimento que deve ainda ser incrementado.
 
-```{r cars}
-summary(cars)
-```
-## Preparando o terreno: o que você vai precisar
+
+## 2. Preparando o terreno: o que você vai precisar
+
 
 Este tutorial trabalha com a [linguagem R](https://www.r-project.org/). Também é recomendado que você instale o [RStudio](https://www.rstudio.com/), um ambiente de desenvolvimento integrado à linguagem R que pode facilitar o trabalho de programação. 
 
 Você também vai precisar de alguns documentos de antemão para executar as buscas.
 
-### Dataset de registros do GBIF
 
-A estratégia de busca pelos registros é da mais ampla para a mais estrita ("top-down search"), e para isso precisaremos "garimpar" todos os nossos registros de interesse na "mina" de registros disponíveis. Para este tutorial, estaremos usando o repositório do [GBIF](https://www.gbif.org/).
-
-Para esta primeira busca, vamos usar [este repositório](https://www.gbif.org/occurrence/download/0007911-210819072339941), que reúne 3,350 datasets e conta com exatos 12.630.473 registros de coleções biológicas de todos os grupos seres vivos listados como ocorrendo no Brasil. Note que este conjunto de dados não inclui outras fontes de origem que não sejam materiais depositados nos herbários ou museus. 
-
-*Observação 1*: O arquivo é super pesado (3,8 GB) e pode demorar horas para baixar. 
-*Observação 2*: Uma vez baixado, JAMAIS tente abrir este arquivo, certamente vai travar o seu computador, ou o arquivo simplesmente não será aberto. Bases de dados grandes como estas só podem ser manipuladas via [SQL](https://en.wikipedia.org/wiki/SQL), faremos isso no próprio R mais adiante. 
+### 2.1. Dataset de registros do GBIF
 
 
-## Including Plots
+A estratégia de busca pelos registros é da mais ampla para a mais estrita (*top-down search*), e para isso precisaremos "garimpar" todos os nossos registros de interesse na "mina" de registros disponíveis. Para este tutorial, estaremos usando o repositório do [GBIF](https://www.gbif.org/).
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+Para esta primeira busca, vamos usar [esta database ](https://www.gbif.org/occurrence/download/0007911-210819072339941), que reúne 3,350 datasets e conta com exatos 12.630.473 registros de coleções biológicas de todos os grupos seres vivos listados como ocorrendo no Brasil. Note que este conjunto de dados não inclui outras fontes de origem que não sejam materiais depositados nos herbários ou museus. 
+
+
+**Observação 1**: Este arquivo é super pesado (3,8 GB) e pode demorar horas para baixar.
+
+
+**Observação 2**: Uma vez baixado, JAMAIS tente abrir este arquivo, certamente vai travar o seu computador, ou o arquivo simplesmente não será aberto. Bases de dados grandes como estas só podem ser manipuladas via [SQL](https://en.wikipedia.org/wiki/SQL), faremos isso no próprio R mais adiante. 
+
+
+### 2.2. Base de nomes da Flora do Brasil 2020
+
+
+Para checar o estado taxonômico e nomenclatural dos nomes associados aos registros, vamos usar a base de dados da [Flora do Brasil 2020](http://floradobrasil.jbrj.gov.br/reflora/PrincipalUC/PrincipalUC.do;jsessionid=0D61E6157D3E362DFE01A5F66C4CB2D4). Para fazer o download desta base de dados, faça o que se segue:
+
+
+1. Na página da Flora do Brasil 2020, clique na aba "Acesso aos Dados";
+
+
+2. Clique em "Dados no formato Darwin Core Archive (Atualizado Semanalmente)". Você será redirecionado para a página do repositório de dados da Flora 2020 que contém os links para download da base de dados.
+
+3. Clique em "DwC-A" nas opções de download. Um arquivo chamado `dwca-lista_especies_flora_brasil-v393.325.zip` deverá ser baixado.
+
+
+A partir daqui, vamos trabalhar com a base de dados no próprio Excel, de modo a gerar um arquivo com formato e condições específicas, chamado `flora2020.txt`. Este arquivo também está disponível para download clicando aqui.
+
+## 3. Abrindo os arquivos e carregando-os no R
+
+Vamos agora ao R/RStudio e começar a abrir os arquivos. Primeiro, vamos carregar os pacotes (*libraries*) necessários para este tutorial.
+
+Ah, não se esqueça de selecionar o seu diretório de trabalho (wd) através da função `setwd()`. Faça questão de criar uma pasta com um nome curto, e num diretório curto (evite pastas dentro de pastas), isso pode atrapalhar o seu trabalho.
+
+```{r eval=FALSE, include=TRUE}
+
+# Abrindo os pacotes...
+library(sqldf)
+library(taxize)
+library(rgbif)
+library(data.table)
+library(dplyr)
+library(stringr)
+library(readxl)
+library(openxlsx)
+
+## Caso você não tenha os pacotes acima, certifique-se de instalá-los de antemão, através da função install.packages().
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+Para importar a base de dados da Flora do Brasil 2020:
+
+```{r eval=FALSE, include = TRUE}
+read.delim(choose.files(), encoding = "UTF-8") -> flora2020 
+# em "choose.files()", escolha a base de dados da Flora 2020 com as espécies de interesse, obtidas em passo anterior.
+
+```
+
+
+## 4. Fazendo a busca em SQL do gazzetteer de interesse
+
+
+Agora, faremos  uma *query* via SQL, e selecionar apenas aqueles registros da base de dados de ocorrência do GBIF que contenham a UC de interesse. Vamos primeiro trabalhar com uma busca simples, e buscar o gazzetteer "Serra do Mar", em menção ao Parque Estadual Serra do Mar. Note que outras buscas por outros topônimos devem ser feitas para recuperar mais registros.
+
+
+A busca pode demorar alguns minutos...
+
+```{r eval=FALSE, include = TRUE}
+start_time <- Sys.time()
+
+selected <- read.csv.sql(choose.files(), sep = '\t', eol = '\n',
+             sql = 'SELECT * FROM file WHERE locality LIKE "%Serra do Mar%"') # Note que aqui está "%Serra do Mar%", mas o gazzetteer pode ser outro!!!
+end_time <- Sys.time()
+end_time - start_time
+
+## Em "choose.files()", selecione o arquivo "occurrence.txt" da pasta que você baixou do GBIF - é o arquivo mais pesado da pasta que contém todas as informações das ocorrências obtidas na busca.
+```
+
+Após a busca, vamos exportar os resultados dessa seleção de registros que potencialmente estão na área de interesse: 
+
+```{r}
+write.table(selected, paste("PESM_registros_raw.txt", sep = ""), sep = '\t', row.names = F)
+```
+
+
+## 5. Checando e corrigindo o estado dos nomes usando a base da Flora do Brasil 2020
+
+Agora que temos os registros buscados
