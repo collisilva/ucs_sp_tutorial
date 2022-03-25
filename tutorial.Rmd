@@ -1,7 +1,7 @@
 ---
 title: "Tutorial rápido - Primeira busca de registros de ocorrência de plantas vasculares no Parque Estadual Serra do Mar, São Paulo"
 author: "Matheus Colli-Silva"
-date: "09/03/2022"
+date: "25/03/2022"
 output: html_document
 ---
 
@@ -22,6 +22,7 @@ Neste tutorial, você deverá encontrar informações sobre:
 
 4) Como obter uma tabela com registros preliminares para posterior checagem manual.
 
+
 Note que este tutorial é preliminar e apenas organiza um procedimento que deve ainda ser incrementado.
 
 
@@ -30,22 +31,39 @@ Note que este tutorial é preliminar e apenas organiza um procedimento que deve 
 
 Este tutorial trabalha com a [linguagem R](https://www.r-project.org/). Também é recomendado que você instale o [RStudio](https://www.rstudio.com/), um ambiente de desenvolvimento integrado à linguagem R que pode facilitar o trabalho de programação. 
 
-Você também vai precisar de alguns documentos de antemão para executar as buscas.
+Você também vai precisar de alguns documentos de antemão para executar as buscas:
 
 
-### 2.1. Dataset de registros do GBIF
+### 2.1. Dataset de registros do GBIF e speciesLink
 
 
-A estratégia de busca pelos registros é da mais ampla para a mais estrita (*top-down search*), e para isso precisaremos "garimpar" todos os nossos registros de interesse na "mina" de registros disponíveis. Para este tutorial, estaremos usando o repositório do [GBIF](https://www.gbif.org/).
+A estratégia de busca pelos registros é da mais ampla para a mais estrita (*top-down search*), e para isso precisaremos "garimpar" todos os nossos registros de interesse na "mina" de registros disponíveis. Para este tutorial, estaremos usando o repositório do [GBIF](https://www.gbif.org/) e do [speciesLink](https://specieslink.net/).
 
 
-Para esta primeira busca, vamos usar [esta database ](https://www.gbif.org/occurrence/download/0177086-210914110416597), que reúne 3.612 datasets e conta com 12.842.010 registros de coleções biológicas de todos os grupos seres vivos listados como ocorrendo no Brasil. Note que este conjunto de dados não inclui outras fontes de origem que não sejam materiais depositados nos herbários ou museus. 
+Para a busca do GBIF, vamos usar [esta database ](https://www.gbif.org/occurrence/download/0177086-210914110416597), que reúne 3.612 datasets e conta com 12.842.010 registros de coleções biológicas de todos os grupos seres vivos (incluindo fauna e flora) listados como ocorrendo no Brasil. Note que este conjunto de dados não inclui outras fontes de origem que não sejam materiais depositados nos herbários ou museus. Já para a busca do speciesLink, vamos usar uma base de dados que corresponde a todos os registros botânicos de espécimes que ocorrem no Brasil, incluindo plantas terrestres, algas e fungos. Esta base possui mais de 7 milhões de registros.
+
+As databases foram convertidas "em off" em formato `.db`, para que consigamos executá-las em SQL no R. Para acessar os arquivos e fazer o download, [clique aqui](https://drive.google.com/drive/folders/1xg5Ld07EulYQqN6Mpir0rNTPO-dtPmMC). Nesta pasta, você deve encontrar dois arquivos: `pvi.db` (base do GBIF) e `pvi_splink.db` (speciesLink).
+
+**Observação 1**: Ambos os arquivos são super pesados (2,7 GB e 17 GB!) e podem demorar horas para baixar dependendo da velocidade da sua internet.
 
 
-**Observação 1**: Este arquivo é super pesado (3,9 GB compactado, e mais de 15 GB descompactado!) e pode demorar horas para baixar dependendo da velocidade da sua internet.
+**Observação 2**: Uma vez baixados, JAMAIS tente abrir estes arquivos usando um leitor de texto comum, certamente vai travar o seu computador, ou o arquivo simplesmente não vai abrir, mesmo se o seu PC for muito rápido. Bases de dados grandes como estas só podem ser manipuladas via [SQL](https://en.wikipedia.org/wiki/SQL), faremos isso no próprio R mais adiante. 
+
+Finalmente, Vamos linkar as bases SQL ao ambiente de trabalho.
 
 
-**Observação 2**: Uma vez baixado, JAMAIS tente abrir este arquivo, certamente vai travar o seu computador, ou o arquivo simplesmente não será aberto. Bases de dados grandes como estas só podem ser manipuladas via [SQL](https://en.wikipedia.org/wiki/SQL), faremos isso no próprio R mais adiante. 
+**Observação:** os arquivos `.db` baixados **devem impreterivelmente estar no mesmo diretório de trabalho** que você selecionou no início deste tutorial. Certifique-se disso!
+
+
+```{r eval = FALSE, include = T}
+
+con <- dbConnect(RSQLite::SQLite(), "pvi.db")
+occ <- tbl(con, "pvi")
+con_splink <- dbConnect(RSQLite::SQLite(), "pvi_splink.db")
+occ_splink <- tbl(con_splink, "pvi_splink")
+
+```
+
 
 
 ### 2.2. Base de nomes da Flora do Brasil 2020
@@ -62,18 +80,23 @@ Para checar o estado taxonômico e nomenclatural dos nomes associados aos regist
 3. Clique em "DwC-A" nas opções de download. Um arquivo chamado `dwca-lista_especies_flora_brasil-v393.325.zip` deverá ser baixado.
 
 
-A partir daqui, vamos trabalhar com a base de dados no próprio Excel, de modo a gerar um arquivo com formato e condições específicas, chamado `flora2020.txt`. Este arquivo também está disponível para download clicando aqui.
+A partir daqui, vamos trabalhar com a base de dados no próprio Excel, de modo a gerar um arquivo com formato e condições específicas, chamado `flora2020.txt`. Este arquivo também está disponível para download [clicando aqui](https://drive.google.com/file/d/1xCErdEAMG1AV79uKXIAQ3deGEHLZCBY1/view?usp=sharing).
+
+
+**Observação:** este arquivo foi atualizado para uma versão mais recente em 25/03/2022. Certifique-se de fazer o download deste arquivo, substituindo eventuais versões anteriores.
 
 ## 3. Abrindo os arquivos e carregando-os no R
 
 Vamos agora ao R/RStudio e começar a abrir os arquivos. Primeiro, vamos carregar os pacotes (*libraries*) necessários para este tutorial.
 
+
 Ah, não se esqueça de selecionar o seu diretório de trabalho (wd) através da função `setwd()`. Faça questão de criar uma pasta com um nome curto, e num diretório curto (evite pastas dentro de pastas), isso pode atrapalhar o seu trabalho.
+
 
 ```{r eval=FALSE, include=TRUE}
 
 # Abrindo os pacotes...
-library(sqldf)
+library(DBI)
 library(taxize)
 library(rgbif)
 library(data.table)
@@ -81,6 +104,8 @@ library(dplyr)
 library(stringr)
 library(readxl)
 library(openxlsx)
+library(tidyr)
+library(dbplyr)
 
 ## Caso você não tenha os pacotes acima, certifique-se de instalá-los de antemão, através da função install.packages().
 
@@ -99,67 +124,122 @@ Vamos incluir essa tabela no nosso ambiente de trabalho e chamar ela de `flora20
 
 
 ```{r eval=FALSE, include = T}
-read.csv(choose.files()) -> flora2020 ##selecione o arquivo "fb2020.txt" que você baixou no seu diretório
+read.delim(choose.files()) -> flora2020 ##selecione o arquivo "fb2020.txt" que você baixou no seu diretório
 
 ```
 
 
 ## 4. Fazendo a busca em SQL do gazzetteer de interesse
 
+### 4.1. Busca no repositório do GBIF
 
 Agora, faremos  uma *query* via SQL, e selecionar apenas aqueles registros da base de dados de ocorrência do GBIF que contenham a UC de interesse. Vamos primeiro trabalhar com uma busca simples, e buscar o gazzetteer "Serra do Mar", em menção ao Parque Estadual Serra do Mar. Note que outras buscas por outros topônimos devem ser feitas para recuperar mais registros.
 
 
-A busca pode demorar entre 20 e 60 minutos...
+A busca pode demorar entre 10-30 minutos...
 
 ```{r eval=FALSE, include = TRUE}
-start_time <- Sys.time() #para termos noção de quanto tempo levou o processo
 
-selected <- read.csv.sql(choose.files(), sep = '\t', eol = '\n',
-             sql = 'SELECT * FROM file WHERE locality LIKE "%Serra do Mar%"') # Note que aqui está "%Serra do Mar%", mas o gazzetteer poderia ser outro!!!
 
-end_time <- Sys.time()
-end_time - start_time
+## Criando uma pasta no seu diretório de trabalho para salvar os outputs das buscas...
+newfolder <- "outputs" 
+outdir <- paste(getwd(), newfolder, sep = "/")
+dir.create(file.path(paste(getwd(), sep = ""), newfolder))
 
-## Em "choose.files()", selecione o arquivo "occurrence.txt" da pasta que você baixou do GBIF - é o arquivo mais pesado da pasta que contém todas as informações das ocorrências obtidas na busca.
+search <- "Serra do Mar" ## ATENÇÃO: altere livremente o topônimo da sua busca aqui!!! Neste caso, para fins de exemplo estou usando "Serra do Mar", mas note que poderia ser qualquer outro topônimo!
+query <- paste("%", search, "%", sep = "")
+dplyr::tbl(con, "pvi") %>% filter(locality %like% query | municipality %like% query) %>% collect() -> selected
+  
 ```
 
-Após a busca, vamos exportar os resultados dessa seleção de registros que potencialmente estão na área de interesse: 
+Feita a busca, vamos exportar os resultados dessa seleção de registros que potencialmente estão na área de interesse: 
 
 ```{r eval=FALSE, include = TRUE}
-write.table(selected, "PESM_registros_raw.txt", sep = '\t', row.names = F)
+
+setwd(outdir) ## Mudando o diretório de trabalho para a pasta criada para salvar o output das buscas...
+as.data.frame(substr(as.matrix(selected), 1, 400)) -> selected ## Convertendo as buscas em formato data.frame, e restringindo o número de caracteres de cada célula para otimizar o tamanho do output...
+write.xlsx(selected, paste("1_raw_gbif_", search, ".xlsx", sep = ""), append = T) ## Salvando o arquivo em formato planilha excel (.xlsx)...
+
+## Apenas para fins de análise, vamos criar um elemento que informe quantos registros foram recuperados, e para quantas espécies e famílias.
+suma.raw_gbif <- c(nrow(selected), length(unique(selected$speciesKey)), length(unique(selected$familyKey)))
+
+```
+
+### 4.2. Busca no repositório do speciesLink
+
+Vamos agora repetir o mesmo procedimento, mas fazendo a busca no repositório de dados do speciesLink...
+
+**Observação:** novamente, os arquivos `.db` baixados **devem impreterivelmente estar no mesmo diretório de trabalho** que você selecionou no início deste tutorial. Certifique-se disso!
+
+Essa busca deve demorar um pouco menos, cerca de 10-20 minutos, mas depende da potência do seu computador.
+
+```{r eval=FALSE, include = TRUE}
+
+## Criando uma pasta no seu diretório de trabalho para salvar os outputs das buscas...
+newfolder <- "outputs" 
+outdir <- paste(getwd(), newfolder, sep = "/")
+dir.create(file.path(paste(getwd(), sep = ""), newfolder))
+
+query <- paste("%", search, "%", sep = "")
+dplyr::tbl(con_splink, "pvi_splink") %>% filter(locality %like% query | county %like% query) %>% collect() -> selected_splink
+
+```
+
+Novamente, vamos exportar os resultados dessa seleção de registros que potencialmente estão na área de interesse: 
+
+```{r eval=FALSE, include = TRUE}
+
+setwd(outdir)
+  
+as.data.frame(substr(as.matrix(selected_splink), 1, 400)) -> selected_splink
+write.xlsx(selected_splink, paste("1_raw_splink_", search, ".xlsx", sep = ""), append = T)
+
+## Apenas para fins de análise, vamos criar um elemento que informe quantos registros foram recuperados, e para quantas espécies e famílias.
+suma.raw_splink <- c(nrow(selected_splink), nrow(unique(selected_splink$scientificname)), nrow(unique(selected_splink$family)))
+
 ```
 
 
-## 5. Checando e corrigindo o estado dos nomes usando a base da Flora do Brasil 2020
+## 5. Buscas na base do GBIF
 
-Com a busca feita, podemos proceder para a checagem dos nomes usando a base de dados da Flora 2020. 
+### 5.1. Cruzamento com os dados da Flora do Brasil 2020
+
+Como os nomes científicos não são padronizados na base de dados do GBIF, precisaremos padronizar tudo para conseguirmos cruzar as informações com a base de nomes da Flora do Brasil. A maneira que isso é feita aqui é através de uma busca do `taxonKey` de cada registro. O taxonKey é um identificador único que existe nas bases de dados do GBIF, que associa o registro a um nome científico. Cada nome científico tem um taxonKey ou identificador único, composto por alguns dígitos. Como a busca é feita online, você precisa ter uma conexão estável com a internet. Os comandos a seguir fazer uma ligeira manipulação de dados (seleciona e reposiciona determinadas colunas) para vialibilar a busca, que pode demorar vários minutos (30-60 minutos) dependendo da velocidade do seu computador, bem como da sua conexão com a internet e da quantidade de registros recuperados. Vamos aos comandos:
 
 ```{r eval=F, include = T}
 
-### Estes passos são para recuperar o taxonKey do registro, que corresponde ao nome científico determinado no registro. Esta é a informação que vai ser cruzada com a base de nomes da Flora 2020.
+## Manipulação de dados para organizar as buscas
 
-selected$taxonKey -> taxkey_search_r
-as.data.frame(taxkey_search_r) -> taxkey_search_r
-selected$gbifID -> taxkey_search_r[,2]
-taxkey_search_r$name_fetch <- ""
+taxonKey <- selected$taxonKey
+gbifID <- selected$gbifID
+as.data.frame(taxonKey) -> taxonKey
+as.data.frame(gbifID) -> gbifID
+taxonKey[nrow(taxonKey)+1,] <- 6
+gbifID[nrow(gbifID)+1,] <- 6
+cbind(taxonKey, gbifID) -> taxkey_search_r
+taxkey_search_r[,3] <- 6
 colnames(taxkey_search_r) <- c("taxonKey", "gbifID", "name_fetch")
-start_time <- Sys.time()
-for (i in 1:nrow(selected)){
-  name_usage(key = taxkey_search_r[i,1]) -> res
+as.numeric(taxkey_search_r[,1]) -> taxkey_search_r[,1]
+taxkey_search_r[!(is.na(taxkey_search_r[,1]) | taxkey_search_r[,1]==""), ] -> taxkey_search_r
+
+colnames(taxkey_search_r) <- c("taxonKey", "gbifID", "name_fetch")
+
+## Loop para realizar as buscas dos taxonKeys online - pode demorar vários minutos:
+
+for (i in 1:nrow(taxkey_search_r)){    
+  taxkey_search_r[i,1] -> key
+  name_usage(key = key) -> res
   res[["data"]] -> res
   res$canonicalName -> out
-  out -> taxkey_search_r[i,3]
-}
+  out -> taxkey_search_r[i,3]  
+  }
 
-end_time <- Sys.time()
-end_time - start_time
-
-###Os passos a seguir agora vão fazer o cruzamento das informações GBIF-Flora 2020...
-
+## Cruzando as bases de dados com a Flora do Brasil 2020...:
+    
 merge(flora2020, taxkey_search_r, by.y = "name_fetch", by.x = "name_concat", all.y = T) -> taxkey_search
 merge(taxkey_search, selected, by.x = "gbifID", by.y = "gbifID") -> data_merged
 data_merged <- data_merged[!(is.na(data_merged$id)),]
+data_merged[1,] <- 1
 
 ```
 
@@ -169,90 +249,259 @@ Note que o formato DwC do GBIF contém centenas de colunas, e não precisaremos 
 
 ```{r eval = F, include = T}
 
+export <- data.frame("", data_merged$higherClassification.x, data_merged$family.x,
+                     data_merged$taxonRank.x, data_merged$UseName, data_merged$establishmentMeans.x,
+                     data_merged$iucnRedListCategory, "", data_merged$identifier, data_merged$catalogNumber,
+                     data_merged$otherCatalogNumbers, data_merged$collectionCode, data_merged$gbifID,
+                     data_merged$recordedBy, data_merged$recordNumber, data_merged$year,
+                     data_merged$month, data_merged$day, data_merged$identifiedBy,
+                     data_merged$stateProvince, data_merged$municipality, data_merged$locality,
+                     data_merged$decimalLatitude, data_merged$decimalLongitude,
+                     data_merged$occurrence_SP, data_merged$endemica_SP)
+    
+## Para facilitar a visualização e dados e a exportação das planilhas finais, vamos mudar os nomes das colunas para algo mais legível...:
 
-export <- data.frame("", data_merged$higherClassification.x, data_merged$family.x, data_merged$taxonRank.x,
-                     data_merged$UseName, data_merged$establishmentMeans.x, data_merged$iucnRedListCategory,
-                     data_merged$identifier,data_merged$catalogNumber, data_merged$collectionCode,
-                     data_merged$gbifID,data_merged$recordedBy, data_merged$recordNumber, data_merged$year,
-                     data_merged$month,data_merged$day,data_merged$identifiedBy, data_merged$stateProvince,
-                     data_merged$municipality,data_merged$locality, data_merged$decimalLatitude,
-                     data_merged$decimalLongitude, data_merged$occurrence_SP, data_merged$endemica_SP)
+colnames(export) <- c("1. Observações", "2. Grupos", "3. Família",
+                      "4. Taxon Rank", "5. Espécie", "6. Origem (nativa, naturalizada, cultivada)",
+                      "7. Categoria de Ameaça IUCN", "8. BARCODE ELEGIDO", "9. Identificador", "10. CatalogNumber",
+                      "11. OtherCatalogNumbers (REFLORA)", "12. Herbário", "13. gbifID",
+                      "14. Coletor", "15. No. coleta", "16. Ano",
+                      "17. Mês", "18. Dia", "19. Determinador",
+                      "20. Estado", "21. Município", "22. Localidade",
+                      "23. Latitude", "24. Longitude",
+                      "25. Ocorre em SP segundo Flora 2020?", "26. Endemica de SP segundo Flora 2020?")
+## Vamos agora exportar os dados em formato de planilha Excel: 
+  
+as.data.frame(substr(as.matrix(export), 1, 400)) -> export
+write.xlsx(export, paste("2_alltaxa_fetch_gbif_", search, ".xlsx", sep = ""), append = T)
+    
+## Para fins de visualização de dados, vamos novamente criar um vetor com as informações de registros, espécies e famílias existentes na base de dados após o cruzamento e padronização com a base da Flora 2020...:
+suma.allmerge_gbif <- c(nrow(export)-1, length(unique(export$`5. Espécie`))-1, length(unique(export$`3. Família`))-1)
+    
+## Agora, vamos selecionar apenas os registros a nível taxonômico de espécie, removendo os indets, e exportar a planilha resultante:
 
-
-#O passo a seguir vai selecionar APENAS os registros determinados a nível de ESPÉCIE. Caso você queira dar uma olhada nos registros indet, você deve voltar ao arquivo `_raw` que você exportou há alguns passos acima, após a busca via SQL.
-
-export %>% filter(data_merged.taxonRank.x == "ESPECIE") -> export
-
-
-#Agora, vamos nomear o nome das colunas selecionadas para algo mais compreensível na planilha para fazer a análise...
-
-colnames(export) <- c("Observações", "Grupos", "Famílias", "Taxon Rank", "Espécies",
-                      "Origem", "Categoria de Ameaça IUCN",
-                      "Identificador", "CatalogNumber", "Herbário", "GBIF ID", "Coletor", "No. coleta",
-                      "Ano de coleta", "Mês", "Dia", "Determinador", "Estado", "Município",
-                      "Localidade", "Latitude", "Longitude", "Ocorre em SP segundo Flora 2020?", "Endêmica de SP segundo Flora 2020?")
+export %>% filter(data_merged$taxonRank.x == "ESPECIE") -> export
+  
+write.xlsx(export, paste("3_species_fetch_gbif_", search, ".xlsx", sep = ""), append = T)
+suma.sppmerge_gbif <- c(nrow(export)-1, length(unique(export$`5. Espécie`))-1, length(unique(export$`3. Família`))-1)
 
 ```
 
-## 6. Sinalizando algumas inconsistências e exportando a planilha final
+
+### 5.2. Sinalizando algumas inconsistências e exportando as tabelas finais
+
 
 Agora que temos a base de dados corrigida para os nomes, e potencialmente com os registros que queremos para o lugar que queremos, podemos começar a explorar melhor os registros. Certamente ainda há registros que não ocorrem no PESM, mas por alguma razão possuem "Serra do Mar" na localização (*e.g.* o registro pode ocorrer na Serra do Mar, mas não dentro dos limites do Parque, ou a espécie não ocorre no estado de SP segundo a Flora 2020 e a determinação está potencialmente errada (ou é um registro novo para o estado)). Além disso, há muitos casos onde um registro possui mais de uma determinação, como casos onde diferentes duplicatas possuem diferentes determinações, ou casos onde por alguma razão a checagem de nomes pelos sinônimos falhou. Nesses casos, é possível sinalizar essas inconsistências, para que os registros sejam manualmente avaliados.
 
 
 1. Se há duplicatas com duas ou mais determinações distintas, ou algum problema com o nome que deve ser avaliado;
 2. Se o registro corresponde a uma espécie com ocorrência conhecida para o estado de São Paulo; caso contrário, deve-se avaliar se a determinação está errada, ou se se trata de um registro novo da espécie para o estado.
+3. Vamos, ainda, fazer mais uma camada de checagem: vamos sinalizar se há espécies (e, se houver, quais são) listadas como ameaçadas de extinção segundo lista da IUCN, mas que a última coleta foi feita antes de 1970. Estas espécies podem ser consideradas "prioritárias para conservação" (note criação de nova coluna no objeto `merged_export`, chamada `Prioritarias_conservacao`), ou talvez "alvos" para que possamos ir a campo no PESM para, com sorte, reencontrá-las.
 
 
-
-```{r eval = F, include = T}
-
-
-for (i in 1:nrow(merged_export)){
-  sum(merged_export$Espécies == merged_export$Espécies[i]) -> merged_export$cont.spp[i]
-  sum(merged_export$concat.code == merged_export$concat.code[i]) -> merged_export$cont.id[i]
-  if (merged_export$Herbário[i] == "SPSF"){
-    merged_export$`Código de Barra`[i] <- paste(merged_export$Herbário[i], merged_export$CatalogNumber[i], sep = "") 
-    merged_export$Observações[i] <- "COLETA DO SPSF, INCLUIR QUANDO DIGITALIZAR"
-    merged_export$`BARCODE ELEGIDO`[i] <- paste(merged_export$Herbário[i], merged_export$CatalogNumber[i], sep = "")
-  }
-  if (as.integer(merged_export$cont.id[i]) > as.integer(merged_export$cont.spp[i]) & as.integer(merged_export$`No. coleta`[i]) != 0){
-    merged_export$Observações[i] <- "DUPLICATAS COM DUAS OU MAIS DETERMINAÇÕES DISTINTAS, OU COM ALGUM PROBLEMA NO NOME, CHECAR QUAL ID CORRETA"
-  }
-  if (merged_export$`Ocorre em SP segundo Flora 2020?`[i] == 0) {
-    merged_export$Observações[i] <- "CHECAR, ESPÉCIE NÃO OCORRE NO ESTADO DE SÃO PAULO SEGUNDO A FLORA 2020"
-    
-  }
-  
-}
-```
-
-
-
-Vamos, ainda, fazer mais uma camada de checagem: vamos sinalizar se há espécies (e, se houver, quais são) listadas como ameaçadas de extinção segundo lista da IUCN, mas que a última coleta foi feita antes de 1970. Estas espécies podem ser consideradas "prioritárias para conservação" (note criação de nova coluna no objeto `merged_export`, chamada `Prioritarias_conservacao`), ou talvez "alvos" para que possamos ir a campo no PESM para, com sorte, reencontrá-las:
+Vamos fazer as indicações de inconsistências primeiro para a base de dados do GBIF:
 
 
 ```{r eval = F, include = T}
 
+## Fazendo algumas manipulações de dados para viabilizar as buscas por inconsistências... 
+export -> merged_export
 merged_export$Prioritarias_conservacao <- ""
+merged_export$concat.code <- ""
+merged_export %>% drop_na(`25. Ocorre em SP segundo Flora 2020?`) -> merged_export
+merged_export %>% drop_na(`26. Endemica de SP segundo Flora 2020?`) -> merged_export
+merged_export$`15. No. coleta`[merged_export$`15. No. coleta`== ""] <- 0
+merged_export$`16. Ano`[merged_export$`16. Ano` == ""] <- 0
+merged_export$`17. Mês`[merged_export$`17. Mês` == ""] <- 0
+merged_export$`18. Dia`[merged_export$`18. Dia` == ""] <- 0
+
 for (i in 1:nrow(merged_export)){
-  if (merged_export$`Ano de coleta`[i] < 1970 & merged_export$cont.spp == 1 & 
-      (merged_export$`Categoria de Ameaça IUCN`[i] == "CR" |
-      merged_export$`Categoria de Ameaça IUCN`[i] == "DD" |
-      merged_export$`Categoria de Ameaça IUCN`[i] == "VU" |
-      merged_export$`Categoria de Ameaça IUCN`[i] == "EN"))
-    {
-    merged_export$Prioritarias_conservacao <- "ESPÉCIE PRIORITÁRIA PARA CONSERVAÇÃO - APENAS 1 COLETA, ANTES DE 1970, E AMEAÇADA DE EXTINÇÃO SEGUNDO IUCN"
-  }
+            merged_export$concat.code[i] <- paste(merged_export$`16. Ano`[i], merged_export$`17. Mês`[i], merged_export$`18. Dia`[i], merged_export$`15. No. coleta`[i], sep="")
+            sum(merged_export$`5. Espécie` == merged_export$`5. Espécie`[i]) -> merged_export$cont.spp[i]
+            sum(merged_export$concat.code == merged_export$concat.code[i]) -> merged_export$cont.id[i]
+			
+if (as.integer(merged_export$cont.id[i]) > as.integer(merged_export$cont.spp[i]) & as.character(merged_export$`15. No. coleta`[i]) != 0){
+merged_export[i,1] <- "DUPLICATAS COM DUAS OU MAIS DETERMINAÇÕES DISTINTAS, OU COM ALGUM PROBLEMA NO NOME, CHECAR QUAL ID CORRETA"
+
+}
+if (merged_export$`25. Ocorre em SP segundo Flora 2020?`[i] == 0) {
+              merged_export$`1. Observações`[i] <- paste0(merged_export$`1. Observações`[i], " CHECAR, ESPÉCIE NÃO OCORRE NO ESTADO DE SÃO PAULO SEGUNDO A FLORA 2020")
+              }
+    
+if (merged_export$`16. Ano`[i] < 1970 & merged_export$cont.spp == 1 &
+                (merged_export$`7. Categoria de Ameaça IUCN`[i] == "CR" |
+                 merged_export$`7. Categoria de Ameaça IUCN`[i] == "DD" |
+                 merged_export$`7. Categoria de Ameaça IUCN`[i] == "VU" |
+                 merged_export$`7. Categoria de Ameaça IUCN`[i] == "EN")){
+              merged_export$Prioritarias_conservacao[i] <- "ESPÉCIE PRIORITÁRIA PARA CONSERVAÇÃO - APENAS 1 COLETA, ANTES DE 1970, E AMEAÇADA DE EXTINÇÃO SEGUNDO IUCN"
+            }
 }
 
 ```
 
 
-Finalmente, podemos exportar a tabela com todos os resultados em formato txt, e depois podemos seguir o nosso trabalho importando este arquivo no Excel ou em outro programa de edição de planilhas.
+Agora, basta exportar esta tabela e sumarizar os resultados.
+
 
 ```{r eval = F, include = T}
-write.table(merged_export, "PESM_registros_filtrados.txt", sep = "\t", row.names = F)
+
+## Primeiro, algumas manipulações de dados necessárias para padronizar tudo na tabela final...
+
+output_final <- merged_export
+
+output_final[,c(1:25,29)] -> output_final
+output_final <- output_final[order(output_final$`3. Família`, output_final$`5. Espécie`),]
+as.data.frame(substr(as.matrix(output_final), 1, 400)) -> output_final
+
+write.xlsx(output_final, paste("4_final_gbif_selected_", search, ".xlsx", sep = ""), append = T)
+
+## Para sumarizar os resultados:
+
+suma.final_gbif <- c(nrow(output_final), length(unique(output_final$`5. Espécie`)), length(unique(output_final$`3. Família`)))
+
 ```
 
-O processo de checagem de inconsistências pode ser exaustivo, e pode conter muitas outras camadas, ou filtros que podem ser avaliadas no processo de curadoria dos dados.
+
+## 6. Buscas na base do speciesLink
+
+
+### 6.1. Cruzamento com os dados da Flora do Brasil 2020
+
+Vamos repetir o mesmo procedimento, mas dessa vez para a base de dados do speciesLink. Neste caso, não há necessidade de fazer uma padronização, pois os nomes científicos já estão previamente padronizados. Então, o processo de cruzamento com os dados da Flora 2020 será muito mais rápido:
+
+```{r eval=F, include = T}
+
+## Breve manipulação de dados para retirar registros sem informação de nome...
+for (p in 1:nrow(selected_splink)) {
+  if (is.null(selected_splink[p,14])){
+    selected_splink[p,14] <- selected_splink[p,10]
+  }}
+
+merge(flora2020, selected_splink, by.y = "scientificname", by.x = "name_concat", all.y = T) -> data_merged
+data_merged <- data_merged[!(is.na(data_merged$id)),]
+data_merged[1,] <- 1
+
+```
+
+
+Novamente, o arquivo original do speciesLink também conta com centenas de colunas, e não precisaremos de informações de muitas delas. Vamos apenas então selecionar as colunas que de fato serão interessantes para os nossos objetivos de filtragem:
+
+
+```{r eval = F, include = T}
+
+export <- data.frame("", data_merged$higherClassification, data_merged$family.x,
+                   data_merged$taxonRank, data_merged$UseName, data_merged$establishmentMeans,
+                   NA, "", data_merged$id, data_merged$catalognumber,
+                   data_merged$barcode, data_merged$collectioncode, NA,
+                   data_merged$collector, data_merged$collectornumber, data_merged$yearcollected,
+                   data_merged$monthcollected, data_merged$daycollected, data_merged$identifiedby,
+                   data_merged$stateprovince, data_merged$county, data_merged$locality,
+                   data_merged$latitude, data_merged$longitude,
+                   data_merged$occurrence_SP, data_merged$endemica_SP)
+  
+## Padronizando tudo, como fizemos com a base do GBIF...
+
+colnames(export) <- c("1. Observações", "2. Grupos", "3. Família",
+                    "4. Taxon Rank", "5. Espécie", "6. Origem (nativa, naturalizada, cultivada)",
+                    "7. Categoria de Ameaça IUCN", "8. BARCODE ELEGIDO", "9. Identificador", "10. CatalogNumber",
+                    "11. OtherCatalogNumbers (REFLORA)", "12. Herbário", "13. gbifID",
+                    "14. Coletor", "15. No. coleta", "16. Ano",
+                    "17. Mês", "18. Dia", "19. Determinador",
+                    "20. Estado", "21. Município", "22. Localidade",
+                    "23. Latitude", "24. Longitude",
+                    "25. Ocorre em SP segundo Flora 2020?", "26. Endemica de SP segundo Flora 2020?")
+
+```
+
+
+Note que, neste caso, há algumas colunas do GBIF que não estão presentes na base de dados do speciesLink. Por isso, para mantermos as duas bases equivalentes e com exatamente os mesmos nomes de colunas, essas colunas foram preenchidas com `NA`, ou seja, *missing data*. Dito isso, vamos prosseguir e exportar as planilhas após a checagem, como fizemos com os dados do GBIF:
+
+
+```{r eval = F, include = T}
+
+as.data.frame(substr(as.matrix(export), 1, 400)) -> export
+write.xlsx(export, paste("2_alltaxa_fetch_splink_", search, ".xlsx", sep = ""), append = T)
+suma.allmerge_splink <- c(nrow(export)-1, length(unique(export$`5. Espécie`))-1, length(unique(export$`3. Família`))-1)
+
+
+export %>% filter(data_merged$taxonRank == "ESPECIE") -> export
+write.xlsx(export, paste("3_species_fetch_splink_", search, ".xlsx", sep = ""), append = T)
+suma.sppmerge_splink <- c(nrow(export)-1, length(unique(export$`5. Espécie`))-1, length(unique(export$`3. Família`))-1)
+
+
+```
+
+
+### 6.2. Sinalizando algumas inconsistências e exportando as tabelas finais
+
+
+Finalmente, faremos o mesmo procedimento que também fizemos acima para a base de dados do speciesLink:
+
+
+```{r eval = F, include = T}
+
+## Fazendo algumas manipulações de dados para viabilizar as buscas por inconsistências... 
+export -> merged_export
+merged_export$Prioritarias_conservacao <- ""
+merged_export$concat.code <- ""
+merged_export %>% drop_na(`25. Ocorre em SP segundo Flora 2020?`) -> merged_export
+merged_export %>% drop_na(`26. Endemica de SP segundo Flora 2020?`) -> merged_export
+merged_export$`15. No. coleta`[merged_export$`15. No. coleta`== ""] <- 0
+merged_export$`16. Ano`[merged_export$`16. Ano` == ""] <- 0
+merged_export$`17. Mês`[merged_export$`17. Mês` == ""] <- 0
+merged_export$`18. Dia`[merged_export$`18. Dia` == ""] <- 0
+
+for (i in 1:nrow(merged_export)){
+            merged_export$concat.code[i] <- paste(merged_export$`16. Ano`[i], merged_export$`17. Mês`[i], merged_export$`18. Dia`[i], merged_export$`15. No. coleta`[i], sep="")
+            sum(merged_export$`5. Espécie` == merged_export$`5. Espécie`[i]) -> merged_export$cont.spp[i]
+            sum(merged_export$concat.code == merged_export$concat.code[i]) -> merged_export$cont.id[i]
+			
+if (as.integer(merged_export$cont.id[i]) > as.integer(merged_export$cont.spp[i]) & as.character(merged_export$`15. No. coleta`[i]) != 0){
+merged_export[i,1] <- "DUPLICATAS COM DUAS OU MAIS DETERMINAÇÕES DISTINTAS, OU COM ALGUM PROBLEMA NO NOME, CHECAR QUAL ID CORRETA"
+
+}
+if (merged_export$`25. Ocorre em SP segundo Flora 2020?`[i] == 0) {
+              merged_export$`1. Observações`[i] <- paste0(merged_export$`1. Observações`[i], " CHECAR, ESPÉCIE NÃO OCORRE NO ESTADO DE SÃO PAULO SEGUNDO A FLORA 2020")
+              }
+    
+if (merged_export$`16. Ano`[i] < 1970 & merged_export$cont.spp == 1 &
+                (merged_export$`7. Categoria de Ameaça IUCN`[i] == "CR" |
+                 merged_export$`7. Categoria de Ameaça IUCN`[i] == "DD" |
+                 merged_export$`7. Categoria de Ameaça IUCN`[i] == "VU" |
+                 merged_export$`7. Categoria de Ameaça IUCN`[i] == "EN")){
+              merged_export$Prioritarias_conservacao[i] <- "ESPÉCIE PRIORITÁRIA PARA CONSERVAÇÃO - APENAS 1 COLETA, ANTES DE 1970, E AMEAÇADA DE EXTINÇÃO SEGUNDO IUCN"
+            }
+}
+
+```
+
+
+Agora, basta exportar esta tabela e sumarizar os resultados.
+
+
+```{r eval = F, include = T}
+
+## Primeiro, algumas manipulações de dados necessárias para padronizar tudo na tabela final...
+
+output_final <- merged_export
+
+output_final[,c(1:25,29)] -> output_final
+output_final <- output_final[order(output_final$`3. Família`, output_final$`5. Espécie`),]
+as.data.frame(substr(as.matrix(output_final), 1, 400)) -> output_final
+
+write.xlsx(output_final, paste("4_final_splink_selected_", search, ".xlsx", sep = ""), append = T)
+
+## Para sumarizar os resultados:
+
+suma.final_splink <- c(nrow(output_final), length(unique(output_final$`5. Espécie`)), length(unique(output_final$`3. Família`)))
+
+```
+
+
+# 7. Avaliando as buscas feitas
+
+Após realizar as buscas e exportar os arquivos, podemos obter algumas informações básicas como quantos registros, espécies e famílias permaneceram após cada etapa do processo de busca de registros. Vamos fazer isso para a busca do GBIF e para o speciesLink. Vamos visualizar as buscas feitas para ambos os métodos:
+
+
+
 
